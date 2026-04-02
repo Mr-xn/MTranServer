@@ -2,6 +2,10 @@ import { BergamotModule } from '@/core/interfaces.js';
 import { ModelBuffers } from '@/core/loader.js';
 import { isCJKCode } from '@/utils/lang-alias.js';
 
+const HTML_ENTITY_PATTERN = /&(?!(?:#\d+|#x[a-fA-F0-9]+|[a-zA-Z][a-zA-Z0-9]+);)/g;
+const INVALID_HTML_LT_PATTERN = /<(?!\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|!--|!DOCTYPE\b|\?xml\b)/g;
+const HTML_LIKE_PATTERN = /<\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|<!--|<!DOCTYPE\b|<\?xml\b/i;
+
 export interface TranslationOptions {
   sourceLang?: string;
   targetLang?: string;
@@ -119,13 +123,15 @@ export class TranslationEngine {
     if (!this.isReady) throw new Error("Engine not initialized");
 
     let processedText = text;
-    if (options.html) {
+    const shouldUseHtml = !!options.html && this._looksLikeHTML(text);
+    if (shouldUseHtml) {
       processedText = this._sanitizeHTML(text);
     }
 
-    const { taggedText, replacements, forceHtml } = this._tagPlaceholders(processedText, options.html);
+    const { taggedText, replacements, forceHtml } = this._tagPlaceholders(processedText, shouldUseHtml);
     const { cleanText, replacements: emojiReplacements } = this._hideEmojis(taggedText);
-    const effectiveOptions: TranslateOptions = forceHtml ? { ...options, html: true } : options;
+    const normalizedOptions: TranslateOptions = { ...options, html: shouldUseHtml };
+    const effectiveOptions: TranslateOptions = forceHtml ? { ...normalizedOptions, html: true } : normalizedOptions;
 
     let translation: string;
     try {
@@ -158,8 +164,14 @@ export class TranslationEngine {
       }
       return match.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     });
+    text = text.replace(HTML_ENTITY_PATTERN, '&amp;');
+    text = text.replace(INVALID_HTML_LT_PATTERN, '&lt;');
 
     return text;
+  }
+
+  private _looksLikeHTML(text: string): boolean {
+    return HTML_LIKE_PATTERN.test(text);
   }
 
   async translateAsync(text: string, options: TranslateOptions = {}): Promise<string> {
@@ -219,6 +231,11 @@ export class TranslationEngine {
       }
     } catch (error: any) {
       console.error(`WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}`);
+      if (options.html && error?.message && /aborted|abort/i.test(error.message)) {
+        const wrappedError = new Error(`HTML parse error: ${error.message}`);
+        (wrappedError as Error & { cause?: unknown }).cause = error;
+        throw wrappedError;
+      }
       throw error;
     } finally {
       messages.delete();
@@ -384,10 +401,13 @@ export class TranslationEngine {
     const taggedText = text.replace(placeholderRegex, (match) => {
       const index = replacements.length;
       replacements.push(match);
-      return `<mt${index} />`;
+      if (htmlEnabled) {
+        return `<mt${index} />`;
+      }
+      return `MT_PLACEHOLDER_${index}_TOKEN`;
     });
 
-    return { taggedText, replacements, forceHtml: !htmlEnabled };
+    return { taggedText, replacements, forceHtml: false };
   }
 
   private _restoreTaggedPlaceholders(text: string, replacements: string[]): string {
@@ -398,6 +418,10 @@ export class TranslationEngine {
     let result = text;
     result = result.replace(/<\/mt\d+>/gi, '');
     result = result.replace(/<mt(\d+)\s*\/?>/gi, (_, index) => {
+      const idx = Number(index);
+      return replacements[idx] ?? _;
+    });
+    result = result.replace(/MT_PLACEHOLDER_(\d+)_TOKEN/g, (_, index) => {
       const idx = Number(index);
       return replacements[idx] ?? _;
     });
