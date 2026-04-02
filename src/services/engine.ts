@@ -46,6 +46,18 @@ function needsPivotTranslation(fromLang: string, toLang: string): boolean {
   return true;
 }
 
+function destroyEngine(fromLang: string, toLang: string, reason: string) {
+  const key = `${fromLang}-${toLang}`;
+  const info = engines.get(key);
+  if (!info) {
+    return;
+  }
+
+  logger.warn(`${reason}: ${key}`);
+  info.engine.destroy();
+  engines.delete(key);
+}
+
 async function getOrCreateSingleEngine(
   fromLang: string,
   toLang: string
@@ -162,6 +174,7 @@ async function translateSingleLanguageText(
       return result;
     } catch (error: any) {
       lastError = error;
+      const isHTMLParseError = isHTML && error.message && error.message.includes('HTML parse error');
       const isSIMDError = error.message && (
         error.message.includes('wasm-simd is not enabled') ||
         error.message.includes('SIMD') ||
@@ -174,16 +187,15 @@ async function translateSingleLanguageText(
         error.message.includes('abort')
       );
 
+      if (isHTMLParseError) {
+        logger.warn(`HTML parsing failed during translation (${fromLang}->${toLang}), retrying as plain text`);
+        destroyEngine(fromLang, toLang, 'Destroying engine after HTML parse failure');
+        return translateSingleLanguageText(fromLang, toLang, text, false);
+      }
+
       if (isMemoryError) {
         logger.warn(`WASM memory error during translation (${fromLang}->${toLang}), retrying (${i + 1}/${MAX_RETRIES})...`);
-
-        const key = `${fromLang}-${toLang}`;
-        const info = engines.get(key);
-        if (info) {
-          logger.warn(`Destroying crashed engine: ${key}`);
-          info.engine.destroy();
-          engines.delete(key);
-        }
+        destroyEngine(fromLang, toLang, 'Destroying crashed engine');
 
         await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
         continue;
