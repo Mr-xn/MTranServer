@@ -9,7 +9,8 @@ describe('TranslationEngine HTML handling', () => {
     engine._translateInternal = (text: string, options: { html?: boolean }) => {
       expect(options.html).toBe(false);
       expect(text).toContain('<= 4.4.6');
-      expect(text).toContain('&downloadable_file_urlsMT_PLACEHOLDER_0_TOKEN');
+      expect(text).toContain('&downloadable_file_urls');
+      expect(text).toContain('MT_PLACEHOLDER_0_TOKEN');
       return text;
     };
 

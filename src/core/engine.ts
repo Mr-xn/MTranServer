@@ -2,6 +2,10 @@ import { BergamotModule } from '@/core/interfaces.js';
 import { ModelBuffers } from '@/core/loader.js';
 import { isCJKCode } from '@/utils/lang-alias.js';
 
+const HTML_ENTITY_PATTERN = /&(?!(?:#\d+|#x[a-fA-F0-9]+|[a-zA-Z][a-zA-Z0-9]+);)/g;
+const INVALID_HTML_LT_PATTERN = /<(?!\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|!--|!DOCTYPE\b|\?xml\b)/g;
+const HTML_LIKE_PATTERN = /<\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|<!--|<!DOCTYPE\b|<\?xml\b/i;
+
 export interface TranslationOptions {
   sourceLang?: string;
   targetLang?: string;
@@ -151,8 +155,6 @@ export class TranslationEngine {
   }
 
   private _sanitizeHTML(text: string): string {
-    text = text.replace(/&(?!(?:#\d+|#x[a-fA-F0-9]+|[a-zA-Z][a-zA-Z0-9]+);)/g, '&amp;');
-    text = text.replace(/<(?!\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|!--|!DOCTYPE\b|\?xml\b)/g, '&lt;');
     text = text.replace(/<(\d+\.\d+)[^>]*>/g, '&lt;$1&gt;');
     text = text.replace(/<([^a-zA-Z/!?][^>]*)>/g, '&lt;$1&gt;');
     const unclosedTags = /<([a-zA-Z]+)(?:\s[^>]*)?>(?![\s\S]*<\/\1>)/g;
@@ -162,12 +164,14 @@ export class TranslationEngine {
       }
       return match.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     });
+    text = text.replace(HTML_ENTITY_PATTERN, '&amp;');
+    text = text.replace(INVALID_HTML_LT_PATTERN, '&lt;');
 
     return text;
   }
 
   private _looksLikeHTML(text: string): boolean {
-    return /<\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|<!--|<!DOCTYPE\b|<\?xml\b/i.test(text);
+    return HTML_LIKE_PATTERN.test(text);
   }
 
   async translateAsync(text: string, options: TranslateOptions = {}): Promise<string> {
