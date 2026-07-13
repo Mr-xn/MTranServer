@@ -8,7 +8,10 @@ const INVALID_HTML_LT_PATTERN = /<(?!\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|!--|!D
 const HTML_LIKE_PATTERN = /<\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|<!--|<!DOCTYPE\b|<\?xml\b/i;
 const WASM_ABORT_PATTERN = /aborted|abort/i;
 const FATAL_WASM_ERROR_PATTERN =
-  /aborted|abort|out of bounds memory access|invalid memory access|invalid table access/i;
+  new RegExp(
+    `${WASM_ABORT_PATTERN.source}|out of bounds memory access|invalid memory access|invalid table access`,
+    'i'
+  );
 
 export interface TranslationOptions {
   sourceLang?: string;
@@ -234,8 +237,9 @@ export class TranslationEngine {
         responses.delete();
       }
     } catch (error: any) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
+      const isError = error instanceof Error;
+      const errorMessage = isError ? error.message : String(error);
+      const errorStack = isError && error.stack ? `\n${error.stack}` : '';
       logger.error(
         `WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}, ` +
         `Error=${errorMessage}${errorStack}`
