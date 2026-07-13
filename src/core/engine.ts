@@ -9,7 +9,7 @@ const HTML_LIKE_PATTERN = /<\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|<!--|<!DOCTYPE\
 const WASM_ABORT_PATTERN = /aborted|abort/i;
 const FATAL_WASM_ERROR_PATTERN =
   new RegExp(
-    `${WASM_ABORT_PATTERN.source}|out of bounds memory access|invalid memory access|invalid table access`,
+    `${WASM_ABORT_PATTERN.source}|out of bounds memory access|memory access out of bounds|invalid memory access|invalid table access|unreachable`,
     'i'
   );
 
