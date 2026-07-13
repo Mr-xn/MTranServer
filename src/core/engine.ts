@@ -7,11 +7,8 @@ const HTML_ENTITY_PATTERN = /&(?!(?:#\d+|#x[a-fA-F0-9]+|[a-zA-Z][a-zA-Z0-9]+);)/
 const INVALID_HTML_LT_PATTERN = /<(?!\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|!--|!DOCTYPE\b|\?xml\b)/g;
 const HTML_LIKE_PATTERN = /<\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|<!--|<!DOCTYPE\b|<\?xml\b/i;
 const WASM_ABORT_PATTERN = /aborted|abort/i;
-const FATAL_WASM_ERROR_PATTERNS = [
-  'out of bounds memory access',
-  'invalid memory access',
-  'invalid table access',
-];
+const FATAL_WASM_ERROR_PATTERN =
+  /aborted|abort|out of bounds memory access|invalid memory access|invalid table access/i;
 
 export interface TranslationOptions {
   sourceLang?: string;
@@ -256,9 +253,7 @@ export class TranslationEngine {
   }
 
   private _isFatalWASMError(error: Error): boolean {
-    const errorMsg = error.message.toLowerCase();
-    return WASM_ABORT_PATTERN.test(errorMsg) ||
-      FATAL_WASM_ERROR_PATTERNS.some(pattern => errorMsg.includes(pattern));
+    return FATAL_WASM_ERROR_PATTERN.test(error.message);
   }
 
   private _getMappedSeparator(sep: string, targetLang?: string): string {
