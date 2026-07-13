@@ -1,10 +1,17 @@
 import { BergamotModule } from '@/core/interfaces.js';
 import { ModelBuffers } from '@/core/loader.js';
 import { isCJKCode } from '@/utils/lang-alias.js';
+import * as logger from '@/logger/index.js';
 
 const HTML_ENTITY_PATTERN = /&(?!(?:#\d+|#x[a-fA-F0-9]+|[a-zA-Z][a-zA-Z0-9]+);)/g;
 const INVALID_HTML_LT_PATTERN = /<(?!\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|!--|!DOCTYPE\b|\?xml\b)/g;
 const HTML_LIKE_PATTERN = /<\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|<!--|<!DOCTYPE\b|<\?xml\b/i;
+const WASM_ABORT_PATTERN = /aborted|abort/i;
+const FATAL_WASM_ERROR_PATTERN =
+  new RegExp(
+    `${WASM_ABORT_PATTERN.source}|memory access out of bounds|invalid memory access|invalid table access|unreachable`,
+    'i'
+  );
 
 export interface TranslationOptions {
   sourceLang?: string;
@@ -230,8 +237,11 @@ export class TranslationEngine {
         responses.delete();
       }
     } catch (error: any) {
-      console.error(`WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}`);
-      if (options.html && error?.message && /aborted|abort/i.test(error.message)) {
+      logger.error(
+        `WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}`,
+        error
+      );
+      if (options.html && error?.message && WASM_ABORT_PATTERN.test(error.message)) {
         const wrappedError = new Error(`HTML parse error: ${error.message}`);
         (wrappedError as Error & { cause?: unknown }).cause = error;
         throw wrappedError;
@@ -244,13 +254,7 @@ export class TranslationEngine {
   }
 
   private _isFatalWASMError(error: Error): boolean {
-    const fatalPatterns = [
-      'Out of bounds memory access',
-      'Invalid memory access',
-      'Invalid table access',
-    ];
-    const errorMsg = error.message.toLowerCase();
-    return fatalPatterns.some(pattern => errorMsg.includes(pattern));
+    return FATAL_WASM_ERROR_PATTERN.test(error.message);
   }
 
   private _getMappedSeparator(sep: string, targetLang?: string): string {
