@@ -1,6 +1,7 @@
 import { BergamotModule } from '@/core/interfaces.js';
 import { ModelBuffers } from '@/core/loader.js';
 import { isCJKCode } from '@/utils/lang-alias.js';
+import * as logger from '@/logger/index.js';
 
 const HTML_ENTITY_PATTERN = /&(?!(?:#\d+|#x[a-fA-F0-9]+|[a-zA-Z][a-zA-Z0-9]+);)/g;
 const INVALID_HTML_LT_PATTERN = /<(?!\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|!--|!DOCTYPE\b|\?xml\b)/g;
@@ -230,7 +231,12 @@ export class TranslationEngine {
         responses.delete();
       }
     } catch (error: any) {
-      console.error(`WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
+      logger.error(
+        `WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}, ` +
+        `Error=${errorMessage}${errorStack}`
+      );
       if (options.html && error?.message && /aborted|abort/i.test(error.message)) {
         const wrappedError = new Error(`HTML parse error: ${error.message}`);
         (wrappedError as Error & { cause?: unknown }).cause = error;
@@ -248,6 +254,7 @@ export class TranslationEngine {
       'Out of bounds memory access',
       'Invalid memory access',
       'Invalid table access',
+      'Aborted',
     ];
     const errorMsg = error.message.toLowerCase();
     return fatalPatterns.some(pattern => errorMsg.includes(pattern));
