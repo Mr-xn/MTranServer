@@ -6,6 +6,7 @@ import * as logger from '@/logger/index.js';
 const HTML_ENTITY_PATTERN = /&(?!(?:#\d+|#x[a-fA-F0-9]+|[a-zA-Z][a-zA-Z0-9]+);)/g;
 const INVALID_HTML_LT_PATTERN = /<(?!\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|!--|!DOCTYPE\b|\?xml\b)/g;
 const HTML_LIKE_PATTERN = /<\/?[a-zA-Z][\w:-]*(?:\s[^<>]*?)?\/?>|<!--|<!DOCTYPE\b|<\?xml\b/i;
+const WASM_ABORT_PATTERN = /aborted|abort/i;
 
 export interface TranslationOptions {
   sourceLang?: string;
@@ -237,7 +238,7 @@ export class TranslationEngine {
         `WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}, ` +
         `Error=${errorMessage}${errorStack}`
       );
-      if (options.html && error?.message && /aborted|abort/i.test(error.message)) {
+      if (options.html && error?.message && WASM_ABORT_PATTERN.test(error.message)) {
         const wrappedError = new Error(`HTML parse error: ${error.message}`);
         (wrappedError as Error & { cause?: unknown }).cause = error;
         throw wrappedError;
@@ -254,10 +255,10 @@ export class TranslationEngine {
       'Out of bounds memory access',
       'Invalid memory access',
       'Invalid table access',
-      'Aborted',
     ];
     const errorMsg = error.message.toLowerCase();
-    return fatalPatterns.some(pattern => errorMsg.includes(pattern));
+    return WASM_ABORT_PATTERN.test(errorMsg) ||
+      fatalPatterns.some(pattern => errorMsg.includes(pattern.toLowerCase()));
   }
 
   private _getMappedSeparator(sep: string, targetLang?: string): string {
