@@ -237,12 +237,9 @@ export class TranslationEngine {
         responses.delete();
       }
     } catch (error: any) {
-      const isError = error instanceof Error;
-      const errorMessage = isError ? error.message : String(error);
-      const errorStack = isError && error.stack ? `\n${error.stack}` : '';
       logger.error(
-        `WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}, ` +
-        `Error=${errorMessage}${errorStack}`
+        `WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}`,
+        error
       );
       if (options.html && error?.message && WASM_ABORT_PATTERN.test(error.message)) {
         const wrappedError = new Error(`HTML parse error: ${error.message}`);
