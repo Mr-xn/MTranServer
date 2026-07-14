@@ -23,6 +23,7 @@ export interface TranslateOptions {
   qualityScores?: boolean;
   alignment?: boolean;
   html?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface TranslationConfig {
@@ -46,6 +47,8 @@ interface QueueTask {
   options: TranslateOptions;
   resolve: (value: string) => void;
   reject: (reason: any) => void;
+  signal?: AbortSignal;
+  onAbort?: () => void;
 }
 
 export class TranslationEngine {
@@ -128,6 +131,7 @@ export class TranslationEngine {
 
   translate(text: string, options: TranslateOptions = {}): string {
     if (!this.isReady) throw new Error("Engine not initialized");
+    this._throwIfAborted(options.signal);
 
     let processedText = text;
     const shouldUseHtml = !!options.html && this._looksLikeHTML(text);
@@ -147,6 +151,7 @@ export class TranslationEngine {
       } else {
         translation = this._translateInternal(cleanText, effectiveOptions);
       }
+      this._throwIfAborted(options.signal);
     } catch (error: any) {
       if (this._isFatalWASMError(error)) {
         this.isReady = false;
@@ -183,7 +188,26 @@ export class TranslationEngine {
 
   async translateAsync(text: string, options: TranslateOptions = {}): Promise<string> {
     return new Promise((resolve, reject) => {
-      this.pendingQueue.push({ text, options, resolve, reject });
+      const task: QueueTask = {
+        text,
+        options,
+        resolve,
+        reject,
+        signal: options.signal,
+      };
+      if (task.signal?.aborted) {
+        reject(this._abortError());
+        return;
+      }
+      task.onAbort = () => {
+        const index = this.pendingQueue.indexOf(task);
+        if (index !== -1) {
+          this.pendingQueue.splice(index, 1);
+          reject(this._abortError());
+        }
+      };
+      task.signal?.addEventListener('abort', task.onAbort, { once: true });
+      this.pendingQueue.push(task);
       this._processQueue();
     });
   }
@@ -193,6 +217,11 @@ export class TranslationEngine {
 
     this.translating = true;
     const task = this.pendingQueue.shift()!;
+    if (task.signal?.aborted) {
+      task.reject(this._abortError());
+      this._finishTask(task);
+      return;
+    }
 
     try {
       const result = this.translate(task.text, task.options);
@@ -200,8 +229,27 @@ export class TranslationEngine {
     } catch (error) {
       task.reject(error);
     } finally {
-      this.translating = false;
-      setImmediate(() => this._processQueue());
+      this._finishTask(task);
+    }
+  }
+
+  private _finishTask(task: QueueTask): void {
+    if (task.signal && task.onAbort) {
+      task.signal.removeEventListener('abort', task.onAbort);
+    }
+    this.translating = false;
+    setImmediate(() => this._processQueue());
+  }
+
+  private _abortError(): Error {
+    const error = new Error('Translation request aborted');
+    error.name = 'AbortError';
+    return error;
+  }
+
+  private _throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      throw this._abortError();
     }
   }
 
@@ -222,6 +270,7 @@ export class TranslationEngine {
     const responseOptions = new this.bergamot.VectorResponseOptions();
 
     try {
+      this._throwIfAborted(options.signal);
       messages.push_back(cleanedText);
       responseOptions.push_back({
         qualityScores: options.qualityScores || false,
@@ -232,7 +281,9 @@ export class TranslationEngine {
       const responses = this.service.translate(this.model, messages, responseOptions);
       try {
         const result = responses.get(0);
-        return result.getTranslatedText();
+        const translatedText = result.getTranslatedText();
+        this._throwIfAborted(options.signal);
+        return translatedText;
       } finally {
         responses.delete();
       }
