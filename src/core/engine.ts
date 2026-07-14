@@ -289,7 +289,7 @@ export class TranslationEngine {
       }
     } catch (error: any) {
       logger.error(
-        `WASM Error Context: TextLength=${cleanedText.length}, Text=${JSON.stringify(cleanedText)}, Options=${JSON.stringify(options)}`,
+        `WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}`,
         error
       );
       if (options.html && error?.message && WASM_ABORT_PATTERN.test(error.message)) {

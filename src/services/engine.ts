@@ -179,10 +179,13 @@ async function translateSingleLanguageText(
     } catch (error: any) {
       lastError = error;
       if (signal?.aborted) {
+        throwIfAborted(signal);
+      }
+      if (isAbortError(error)) {
         throw error;
       }
       logger.error(
-        `Translation failed (${fromLang}->${toLang}), Text=${JSON.stringify(text)}`,
+        `Translation failed (${fromLang}->${toLang}), text length: ${text.length}, isHTML: ${isHTML}`,
         error
       );
       const isHTMLParseError = isHTML && error.message && error.message.includes('HTML parse error');
@@ -312,9 +315,14 @@ export async function translateWithPivot(
             const translated = await translateSegment(seg.language, toLang, seg.text, isHTML, signal);
             result += translated;
           } catch (error) {
-            if (signal?.aborted) throw error;
+            if (signal?.aborted) {
+              throwIfAborted(signal);
+            }
+            if (isAbortError(error)) {
+              throw error;
+            }
             logger.error(
-              `Failed to translate segment, Text=${JSON.stringify(seg.text)}`,
+              `Failed to translate segment (${seg.language}->${toLang}), text length: ${seg.text.length}`,
               error
             );
             result += seg.text;
@@ -362,9 +370,14 @@ async function translateLongText(
         logger.debug(`Translated ${i + 1}/${sentences.length} sentences`);
       }
     } catch (error) {
-      if (signal?.aborted) throwIfAborted(signal);
+      if (signal?.aborted) {
+        throwIfAborted(signal);
+      }
+      if (isAbortError(error)) {
+        throw error;
+      }
       logger.error(
-        `Failed to translate sentence ${i + 1}, Text=${JSON.stringify(segment)}`,
+        `Failed to translate sentence ${i + 1}/${sentences.length}, text length: ${segment.length}`,
         error
       );
       results.push(segment);
@@ -380,6 +393,10 @@ function throwIfAborted(signal?: AbortSignal): void {
     error.name = 'AbortError';
     throw error;
   }
+}
+
+function isAbortError(error: unknown): error is Error {
+  return error instanceof Error && error.name === 'AbortError';
 }
 
 export function cleanupAllEngines() {
