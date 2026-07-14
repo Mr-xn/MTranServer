@@ -312,6 +312,7 @@ export async function translateWithPivot(
             const translated = await translateSegment(seg.language, toLang, seg.text, isHTML, signal);
             result += translated;
           } catch (error) {
+            if (signal?.aborted) throw error;
             logger.error(
               `Failed to translate segment, Text=${JSON.stringify(seg.text)}`,
               error
