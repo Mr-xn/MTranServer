@@ -15,14 +15,29 @@ export function requestCancellation() {
         controller.abort();
       }
     };
-
-    req.once('aborted', abort);
-    req.once('close', () => {
+    function cleanup() {
+      req.removeListener('aborted', onReqAborted);
+      req.removeListener('close', onReqClose);
+      res.removeListener('close', onResClose);
+      res.removeListener('finish', cleanup);
+    }
+    function onReqAborted() {
+      abort();
+      cleanup();
+    }
+    function onReqClose() {
       if (!req.complete) abort();
-    });
-    res.once('close', () => {
+      cleanup();
+    }
+    function onResClose() {
       if (!res.writableFinished) abort();
-    });
+      cleanup();
+    }
+
+    req.once('aborted', onReqAborted);
+    req.once('close', onReqClose);
+    res.once('close', onResClose);
+    res.once('finish', cleanup);
 
     requestContext.run(controller.signal, next);
   };

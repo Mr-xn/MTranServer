@@ -5,7 +5,10 @@ export function errorHandler() {
   return (err: any, req: Request, res: Response, next: NextFunction) => {
     const requestId = req.id || '-';
     const status = err.status || 500;
-    const requestAborted = req.aborted || err.code === 'ECONNABORTED' || err.message === 'request aborted';
+    const requestAborted = req.aborted
+      || err.name === 'AbortError'
+      || err.code === 'ECONNABORTED'
+      || (typeof err.message === 'string' && err.message.toLowerCase() === 'request aborted');
 
     if (requestAborted) {
       logger.debug(`[${requestId}] Client disconnected before request completed`);
