@@ -26,7 +26,7 @@ export function requestCancellation() {
       cleanup();
     }
     function onReqClose() {
-      if (!req.complete) abort();
+      if (!res.writableFinished) abort();
       cleanup();
     }
     function onResClose() {
