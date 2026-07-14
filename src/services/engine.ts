@@ -362,7 +362,7 @@ async function translateLongText(
         logger.debug(`Translated ${i + 1}/${sentences.length} sentences`);
       }
     } catch (error) {
-      if (signal?.aborted) throw error;
+      if (signal?.aborted) throwIfAborted(signal);
       logger.error(
         `Failed to translate sentence ${i + 1}, Text=${JSON.stringify(segment)}`,
         error
