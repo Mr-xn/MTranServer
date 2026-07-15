@@ -17,7 +17,6 @@ export function requestCancellation() {
     };
     function cleanup() {
       req.removeListener('aborted', onReqAborted);
-      req.removeListener('close', onReqClose);
       res.removeListener('close', onResClose);
       res.removeListener('finish', cleanup);
     }
@@ -25,17 +24,15 @@ export function requestCancellation() {
       abort();
       cleanup();
     }
-    function onReqClose() {
-      if (!res.writableFinished) abort();
-      cleanup();
-    }
     function onResClose() {
-      if (!res.writableFinished) abort();
+      // Use writableEnded (res.end() was called) rather than writableFinished
+      // (data fully flushed) to avoid a race where close fires between end()
+      // and the finish event while data is still being written.
+      if (!res.writableEnded) abort();
       cleanup();
     }
 
     req.once('aborted', onReqAborted);
-    req.once('close', onReqClose);
     res.once('close', onResClose);
     res.once('finish', cleanup);
 

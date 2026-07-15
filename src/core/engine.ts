@@ -153,7 +153,8 @@ export class TranslationEngine {
       }
       this._throwIfAborted(options.signal);
     } catch (error: any) {
-      if (this._isFatalWASMError(error)) {
+      // Never treat a client-initiated abort as a fatal WASM engine failure.
+      if (error.name !== 'AbortError' && this._isFatalWASMError(error)) {
         this.isReady = false;
         throw new Error(`Fatal WASM error: ${error.message}`);
       }
@@ -288,6 +289,8 @@ export class TranslationEngine {
         responses.delete();
       }
     } catch (error: any) {
+      // Don't log or re-wrap client-initiated cancellations as WASM/HTML errors.
+      if (error.name === 'AbortError') throw error;
       logger.error(
         `WASM Error Context: TextLength=${cleanedText.length}, Options=${JSON.stringify(options)}`,
         error
